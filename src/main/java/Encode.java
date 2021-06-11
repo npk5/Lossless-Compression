@@ -101,7 +101,7 @@ public class Encode {
 					buf |= (((bits -= 8 - bufSize) >= 0)
 							? (rep >>> bits) // If able to fill byte
 							: (rep << -bits))
-							& ((0xff) >> bufSize); // Mask bits to left
+							& ((0xff) >>> bufSize); // Mask bits to left
 
 					if ((bufSize = (byte) (8 + bits)) >= 8) {
 						enc.write(buf);
@@ -116,7 +116,7 @@ public class Encode {
 
 	private static record Node(Byte elem, Integer freq, Node left, Node right) implements Comparable<Node> {
 		Node(Node left, Node right) {
-			this((byte) 0, left.freq + right.freq, left, right);
+			this(null, left.freq + right.freq, left, right);
 		}
 
 		Node(Byte elem, Integer freq) {
