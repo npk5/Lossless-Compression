@@ -32,7 +32,7 @@ public class Encode {
 			bytes = in.readAllBytes();
 		}
 
-		// For each character, increase its frequency
+		// For each byte, increase its frequency
 		Map<Byte, Integer> freqMap = new HashMap<>();
 		for (byte b : bytes)
 			freqMap.put(b, freqMap.getOrDefault(b, 0) + 1);
@@ -45,22 +45,22 @@ public class Encode {
 		while (pq.size() > 1)
 			pq.add(new Node(pq.poll(), pq.poll()));
 
-		// Get Heap and create a mapping for each Character
+		// Get Heap and create a mapping for each Byte
 		Node heap = pq.poll();
 		Map<Byte, Tuple<Long, Byte>> map = new HashMap<>();
-		recursiveAdd(heap, map, new Tuple<>(0L, (byte) 0));
+		createMap(heap, map, new Tuple<>(0L, (byte) 0));
 
 		writeToFile(fileName, map, bytes);
 	}
 
-	private static void recursiveAdd(Node heap, Map<Byte, Tuple<Long, Byte>> map, Tuple<Long, Byte> tuple) {
+	private static void createMap(Node heap, Map<Byte, Tuple<Long, Byte>> map, Tuple<Long, Byte> tuple) {
 		if (heap == null) return;
 		if (heap.isLeaf()) {
 			map.put(heap.elem, tuple.component2() == 0 ? new Tuple<>(0L, (byte) 1) : tuple);
 		} else {
-			recursiveAdd(heap.left, map, new Tuple<>(
+			createMap(heap.left, map, new Tuple<>(
 					tuple.component1() << 1, (byte) (tuple.component2() + 1)));
-			recursiveAdd(heap.right, map, new Tuple<>(
+			createMap(heap.right, map, new Tuple<>(
 					(tuple.component1() << 1) | 1, (byte) (tuple.component2() + 1)));
 		}
 	}
@@ -71,46 +71,46 @@ public class Encode {
 		file.createNewFile();
 
 		// Write output to .enc file
-		try (final BufferedOutputStream enc = new BufferedOutputStream(new FileOutputStream(file))) {
+		try (BufferedOutputStream enc = new BufferedOutputStream(new FileOutputStream(file))) {
+			long rep;
+			byte bits;
+
 			// Header
 			for (Map.Entry<Byte, Tuple<Long, Byte>> entry : map.entrySet()) {
-				enc.write(entry.getKey());
-				byte bitCount = entry.getValue().component2();
-				enc.write(bitCount);
-				long rep = entry.getValue().component1();
-				for (int i = (int) Math.ceil(bitCount/8.0) - 1; i >= 0; i--)
-					enc.write((byte) (rep >>> (8 * i)));
+				enc.write(entry.getKey()); // Byte
+
+				Tuple<Long, Byte> mapping = entry.getValue();
+				bits = mapping.component2();
+				enc.write(bits); // Amount of bits
+
+				rep = mapping.component1();
+				for (int i = (int) Math.ceil(bits / 8.0) - 1; i >= 0; i--)
+					enc.write((byte) (rep >>> (8 * i))); // Representation
 			}
 
 			// Mark end of header
 			enc.write(new byte[]{0, 0});
 
 			// Data
-			byte buf = 0, bits = 0, next;
+			byte buf = 0, bufSize = 0;
 			for (byte b : bytes) {
-				// Get mapping for byte
 				Tuple<Long, Byte> mapping = map.get(b);
 
-				// Get representation
-				long rep = mapping.component1();
-				for (byte bitCount = mapping.component2(); bitCount > 0;) {
-					bitCount -= 8 - bits;
-					if (bitCount >= 0) // If byte can be filled
-						next = (byte) (rep >>> bitCount);
-					else
-						next = (byte) (rep << -bitCount);
+				rep = mapping.component1();
+				for (bits = mapping.component2(); bits > 0;) {
+					buf |= (((bits -= 8 - bufSize) >= 0)
+							? (rep >>> bits) // If able to fill byte
+							: (rep << -bits))
+							& ((0xff) >> bufSize); // Mask bits to left
 
-					if (bits > 0)
-						next &= ~((byte) (0b1000_0000) >> (bits - 1)); // Mask bits
-					buf |= next;
-					if ((bits = (byte) (8 + bitCount)) >= 8) {
+					if ((bufSize = (byte) (8 + bits)) >= 8) {
 						enc.write(buf);
-						buf = bits = 0; // Clear buffer
+						buf = bufSize = 0; // Clear buffer
 					}
 				}
 			}
 			enc.write(buf);
-			enc.write(bits);
+			enc.write(bufSize);
 		}
 	}
 
