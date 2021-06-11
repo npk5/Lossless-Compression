@@ -21,6 +21,15 @@ import java.util.*;
  */
 public class Encode {
 
+	// File extension for the encoded file
+	static final String EXTENSION = ".enc";
+
+	/**
+	 * Entry point of the encoding program.
+	 * @param args file name at index 0
+	 * @throws IllegalArgumentException when no arguments are specified
+	 * @throws IOException when any of the I/O operations fail
+	 */
 	public static void main(String[] args) throws IOException {
 		if (args.length == 0) throw new IllegalArgumentException();
 
@@ -50,9 +59,15 @@ public class Encode {
 		Map<Byte, Tuple<Long, Byte>> map = new HashMap<>();
 		createMap(heap, map, new Tuple<>(0L, (byte) 0));
 
-		writeToFile(fileName, map, bytes);
+		writeToFile(fileName + EXTENSION, map, bytes);
 	}
 
+	/**
+	 * Creates a map from a heap
+	 * @param heap max heap to construct map from
+	 * @param map reference to the map to be used
+	 * @param tuple tuple to represent the byte
+	 */
 	private static void createMap(Node heap, Map<Byte, Tuple<Long, Byte>> map, Tuple<Long, Byte> tuple) {
 		if (heap == null) return;
 		if (heap.isLeaf()) {
@@ -65,9 +80,17 @@ public class Encode {
 		}
 	}
 
+	/**
+	 * Converts bytes to given mapping and writes them to file.<br>
+	 * Includes a header containing all the mappings.
+	 * @param fileName name of the file to write to
+	 * @param map byte-to-bits map
+	 * @param data bytes to convert
+	 * @throws IOException when any of the I/O operations fail
+	 */
 	private static void writeToFile(String fileName, Map<Byte, Tuple<Long, Byte>> map,
-	                                byte[] bytes) throws IOException {
-		File file = new File(fileName + ".enc");
+	                                byte[] data) throws IOException {
+		File file = new File(fileName);
 		file.createNewFile();
 
 		// Write output to .enc file
@@ -93,7 +116,7 @@ public class Encode {
 
 			// Data
 			byte buf = 0, bufSize = 0;
-			for (byte b : bytes) {
+			for (byte b : data) {
 				Tuple<Long, Byte> mapping = map.get(b);
 
 				rep = mapping.component1();
@@ -114,19 +137,47 @@ public class Encode {
 		}
 	}
 
+	/**
+	 * Inner Node record class.<br>
+	 * Implements Comparable interface, natural order based on frequency.
+	 * @since 16
+	 * @see java.lang.Record
+	 */
 	private static record Node(Byte elem, Integer freq, Node left, Node right) implements Comparable<Node> {
+
+		/**
+		 * Constructor for Node record with left and right children.<br>
+		 * The frequency will be the sum of its children's frequencies.
+		 * @param left left child
+		 * @param right right child
+		 */
 		Node(Node left, Node right) {
 			this(null, left.freq + right.freq, left, right);
 		}
 
+		/**
+		 * Constructor for Node record with element and frequency.
+		 * @param elem byte
+		 * @param freq frequency
+		 */
 		Node(Byte elem, Integer freq) {
 			this(elem, freq, null, null);
 		}
 
+		/**
+		 * Returns whether the given Node is a leaf Node.
+		 * @return true if node does not have any children, false otherwise
+		 */
 		boolean isLeaf() {
 			return left == null && right == null;
 		}
 
+		/**
+		 * Implementation of Comparable interface.<br>
+		 * Order based on frequency.
+		 * @param o other Node
+		 * @return an integer representing the order of the Nodes
+		 */
 		@Override
 		public int compareTo(Node o) {
 			return freq - o.freq;

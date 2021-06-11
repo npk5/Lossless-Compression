@@ -16,8 +16,14 @@ import java.util.*;
  */
 public class Decode {
 
+	/**
+	 * Entry point of the decoding program.
+	 * @param args file name at index 0
+	 * @throws IllegalArgumentException when no arguments are specified or file name has incorrect extension
+	 * @throws IOException when any of the I/O operations fail
+	 */
 	public static void main(String[] args) throws IOException {
-		if (args.length == 0) throw new IllegalArgumentException();
+		if (args.length == 0 || !args[0].endsWith(Encode.EXTENSION)) throw new IllegalArgumentException();
 
 		String fileName = args[0];
 
@@ -45,15 +51,22 @@ public class Decode {
 			map.put(new Tuple<>(rep, len), b);
 		}
 
-		writeToFile(fileName, map, bytes, i);
+		writeToFile(fileName.substring(0, fileName.length() - Encode.EXTENSION.length()), map, bytes, i);
 	}
 
+	/**
+	 * Converts bits to given mapping and writes them to file.
+	 * @param fileName name of the file to write to
+	 * @param map bits-to-byte map
+	 * @param data bytes to convert
+	 * @param offset start of data
+	 * @throws IOException when any of the I/O operations fail
+	 */
 	private static void writeToFile(String fileName, Map<Tuple<Long, Byte>, Byte> map,
 	                                byte[] data, int offset) throws IOException {
 		int last = data.length - 1;
 		// Convert bit groups to respective bytes and write to file
-		try (BufferedOutputStream out = new BufferedOutputStream(
-		     		new FileOutputStream(fileName.substring(0, fileName.length() - 4)))) {
+		try (BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(fileName))) {
 			long rep = 0;
 			byte len = 0;
 			Byte b;
