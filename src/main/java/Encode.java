@@ -47,7 +47,7 @@ public class Encode {
 			freqMap.put(b, freqMap.getOrDefault(b, 0) + 1);
 
 		// Put all mappings into a PriorityQueue sorted by frequency
-		Queue<Node> pq = new PriorityQueue<>(freqMap.size());
+		Queue<Node> pq = new PriorityQueue<>(Math.max(freqMap.size(), 1));
 		freqMap.forEach((key, value) -> pq.add(new Node(key, value)));
 
 		// Create Heap
