@@ -2,7 +2,7 @@ import java.io.*;
 import java.util.*;
 
 /**
- * A lossless compression algorithm based on Huffman encoding.<br>
+ * A recursive lossless compression algorithm based on Huffman encoding.<br>
  * <br>
  * This algorithm can be used on any type of file but will be more effective on
  * files with a lot of repeating bytes. These bytes will then be stored using
@@ -24,26 +24,37 @@ public class Encode {
 	// File extension for the encoded file
 	static final String EXTENSION = ".enc";
 
-	/**
-	 * Entry point of the encoding program.
-	 * @param args file name at index 0
-	 * @throws IllegalArgumentException when no arguments are specified
-	 * @throws IOException when any of the I/O operations fail
-	 */
-	public static void main(String[] args) throws IOException {
-		if (args.length == 0) throw new IllegalArgumentException();
+	private final String fileName;
+	private Map<Byte, Integer> freqMap;
+	private Map<Byte, Tuple<Long, Byte>> map;
+	private final LinkedList<byte[]> headers;
+	private byte[] body;
 
-		String fileName = args[0];
+	public Encode(String fileName) throws IOException {
+		this.fileName = fileName;
+		headers = new LinkedList<>();
+		readFromFile();
+	}
 
-		// Read file
-		byte[] bytes;
+	private void readFromFile() throws IOException {
 		try (BufferedInputStream in = new BufferedInputStream(new FileInputStream(fileName))) {
-			bytes = in.readAllBytes();
+			body = in.readAllBytes();
 		}
+	}
 
+	public void writeToFile() throws IOException {
+		try (BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(fileName + EXTENSION))) {
+			out.write(headers.size());
+			for (byte[] header : headers)
+				out.write(header);
+			out.write(body);
+		}
+	}
+
+	private void createMaps() {
 		// For each byte, increase its frequency
-		Map<Byte, Integer> freqMap = new HashMap<>();
-		for (byte b : bytes)
+		freqMap = new HashMap<>();
+		for (byte b : body)
 			freqMap.put(b, freqMap.getOrDefault(b, 0) + 1);
 
 		// Put all mappings into a PriorityQueue sorted by frequency
@@ -56,85 +67,116 @@ public class Encode {
 
 		// Get Heap and create a mapping for each Byte
 		Node heap = pq.poll();
-		Map<Byte, Tuple<Long, Byte>> map = new HashMap<>();
-		createMap(heap, map, new Tuple<>(0L, (byte) 0));
-
-		writeToFile(fileName + EXTENSION, map, bytes);
+		map = new HashMap<>();
+		createByteMap(heap, 0L, (byte) 0);
 	}
 
 	/**
-	 * Creates a map from a heap
+	 * Creates a map from a max heap.
 	 * @param heap max heap to construct map from
-	 * @param map reference to the map to be used
-	 * @param tuple tuple to represent the byte
+	 * @param rep the value to represent the bits
+	 * @param length the amount of bits to represent the byte
 	 */
-	private static void createMap(Node heap, Map<Byte, Tuple<Long, Byte>> map, Tuple<Long, Byte> tuple) {
+	private void createByteMap(Node heap, Long rep, Byte length) {
 		if (heap == null) return;
 		if (heap.isLeaf()) {
-			map.put(heap.elem, tuple.component2() == 0 ? new Tuple<>(0L, (byte) 1) : tuple);
+			map.put(heap.elem, new Tuple<>(rep, (byte) Math.max(length, 1)));
 		} else {
-			createMap(heap.left, map, new Tuple<>(
-					tuple.component1() << 1, (byte) (tuple.component2() + 1)));
-			createMap(heap.right, map, new Tuple<>(
-					(tuple.component1() << 1) | 1, (byte) (tuple.component2() + 1)));
+			createByteMap(heap.left, rep << 1, (byte) (length + 1));
+			createByteMap(heap.right, (rep << 1) | 1, (byte) (length + 1));
 		}
 	}
 
-	/**
-	 * Converts bytes to given mapping and writes them to file.<br>
-	 * Includes a header containing all the mappings.
-	 * @param fileName name of the file to write to
-	 * @param map byte-to-bits map
-	 * @param data bytes to convert
-	 * @throws IOException when any of the I/O operations fail
-	 */
-	private static void writeToFile(String fileName, Map<Byte, Tuple<Long, Byte>> map,
-	                                byte[] data) throws IOException {
-		File file = new File(fileName);
-		file.createNewFile();
+	public Encode encode() {
+		Map<Byte, Integer> lastFreqMap = freqMap;
+		Map<Byte, Tuple<Long, Byte>> lastMap = map;
 
-		// Write output to .enc file
-		try (BufferedOutputStream enc = new BufferedOutputStream(new FileOutputStream(file))) {
-			long rep;
-			byte bits;
+		createMaps();
 
-			// Header
-			for (Map.Entry<Byte, Tuple<Long, Byte>> entry : map.entrySet()) {
-				enc.write(entry.getKey()); // Byte
+		// Calculate size of encoded data
+		int headerSize = 2, bodySize = 0;
+		for (Map.Entry<Byte, Tuple<Long, Byte>> entry : map.entrySet()) {
+			headerSize += 2 + (int) Math.ceil(entry.getValue()._2() / 8.0);
+			bodySize += freqMap.get(entry.getKey()) * entry.getValue()._2();
+		}
+		bodySize = bodySize / 8 + 2; // Convert to bytes
 
-				Tuple<Long, Byte> mapping = entry.getValue();
-				bits = mapping.component2();
-				enc.write(bits); // Amount of bits
+		if (headerSize + bodySize < body.length) {
+			encode(headerSize, bodySize);
+			return encode();
+		}
 
-				rep = mapping.component1();
-				for (int i = (int) Math.ceil(bits / 8.0) - 1; i >= 0; i--)
-					enc.write((byte) (rep >>> (8 * i))); // Representation
-			}
+		freqMap = lastFreqMap;
+		map = lastMap;
+		return this;
+	}
 
-			// Mark end of header
-			enc.write(new byte[]{0, 0});
+	private void encode(int headerSize, int bodySize) {
+		createHeader(headerSize);
+		encodeBody(bodySize);
+	}
 
-			// Data
-			byte buf = 0, bufSize = 0;
-			for (byte b : data) {
-				Tuple<Long, Byte> mapping = map.get(b);
+	private void createHeader(int size) {
+		byte[] header = new byte[size];
+		int i = 0;
 
-				rep = mapping.component1();
-				for (bits = mapping.component2(); bits > 0;) {
-					buf |= (((bits -= 8 - bufSize) >= 0)
-							? (rep >>> bits) // If able to fill byte
-							: (rep << -bits))
-							& ((0xff) >>> bufSize); // Mask bits to left
+		long rep;
+		byte bits;
+		for (Map.Entry<Byte, Tuple<Long, Byte>> entry : map.entrySet()) {
+			header[i++] = entry.getKey(); // Byte
 
-					if ((bufSize = (byte) (8 + bits)) >= 8) {
-						enc.write(buf);
-						buf = bufSize = 0; // Clear buffer
-					}
+			Tuple<Long, Byte> mapping = entry.getValue();
+			bits = mapping._2();
+			header[i++] = bits; // Amount of bits
+
+			rep = mapping._1();
+			for (int j = (int) Math.ceil(bits / 8.0) - 1; j >= 0; j--)
+				header[i++] = (byte) (rep >>> (8 * j)); // Representation
+		}
+
+		headers.add(header);
+	}
+
+	private void encodeBody(int size) {
+		byte[] body = new byte[size];
+		int i = 0;
+
+		long rep;
+		byte bits;
+		byte buf = 0, bufSize = 0;
+		for (byte b : this.body) {
+			Tuple<Long, Byte> mapping = map.get(b);
+
+			rep = mapping._1();
+			for (bits = mapping._2(); bits > 0;) {
+				buf |= (((bits -= 8 - bufSize) >= 0)
+						? (rep >>> bits) // If able to fill byte
+						: (rep << -bits))
+						& ((0xff) >>> bufSize); // Mask bits to left
+
+				if ((bufSize = (byte) (8 + bits)) >= 8) {
+					body[i++] = buf;
+					buf = bufSize = 0; // Clear buffer
 				}
 			}
-			enc.write(buf);
-			enc.write(bufSize);
 		}
+		body[i++] = buf;
+		body[i] = bufSize;
+		this.body = body;
+	}
+
+	/**
+	 * Entry point of the encoding program.
+	 * @param args file names
+	 */
+	public static void main(String[] args) {
+		Arrays.stream(args).parallel().forEach(fileName -> {
+			try {
+				new Encode(fileName).encode().writeToFile();
+			} catch (IOException e) {
+				System.err.println(e.getMessage());
+			}
+		});
 	}
 
 	/**
