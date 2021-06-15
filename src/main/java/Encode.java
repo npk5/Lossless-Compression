@@ -2,20 +2,7 @@ import java.io.*;
 import java.util.*;
 
 /**
- * A recursive lossless compression algorithm based on Huffman encoding.<br>
- * <br>
- * This algorithm can be used on any type of file but will be more effective on
- * files with a lot of repeating bytes. These bytes will then be stored using
- * fewer bits, thus saving space. The flipside of this, however, is that the
- * file may take up more space if the data is more random.<br>
- * <br>
- * Usage:<br>
- * <br>
- * Call this class with a file name as a parameter. The file will then be
- * encoded and stored as the file name with .enc.<br>
- * <br>
- * Use {@link Decode} for decoding.<br>
- * <br>
+ * A recursive lossless compression algorithm based on Huffman coding.
  * @see Decode
  * @author NPK
  */

@@ -2,15 +2,7 @@ import java.io.*;
 import java.util.*;
 
 /**
- * The decompression algorithm for use with {@link Encode}.<br>
- * <br>
- * Usage:<br>
- * <br>
- * Call this class with a file name as a parameter. The file will then be
- * decoded and stored as the file name without .enc.<br>
- * <br>
- * Use {@link Encode} for encoding.<br>
- * <br>
+ * The decompression algorithm for use with {@link Encode}.
  * @see Encode
  * @author NPK
  */
