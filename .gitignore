@@ -33,7 +33,4 @@ gradle/
 # Test directory
 src/test/
 
-# Test files
-*.enc
-*.txt
-*.png
+sample/
